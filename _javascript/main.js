@@ -1,13 +1,5 @@
+//=include ../_bower_components/jquery/dist/jquery.min.js
 
-// Major dependencies
-var $ = require('jquery');
-var functions = require('./functions/functions');
+$(document).ready(function(){
 
-console.log(functions.multiply(5, 7));
-
-// Modernizr tests and the trigger to run them
-require('browsernizr/test/css/flexbox');
-require('browsernizr');
-
-
-
+});
