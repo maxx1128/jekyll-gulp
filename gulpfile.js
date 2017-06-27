@@ -6,11 +6,14 @@ var browserSync   = require('browser-sync'),
     fs            = require('fs'),
     del           = require('del'),
     runSequence   = require('run-sequence'),
+    babelify      = require('babelify'),
     browserify    = require('browserify'),
     watchify      = require('watchify'),
     source        = require('vinyl-source-stream'),
     buffer        = require('vinyl-buffer'),
-    child         = require('child_process');
+    glob          = require('glob'),
+    child         = require('child_process'),
+    es            = require('event-stream');
 
 // Important variables used throughout the gulp file //
 
@@ -62,17 +65,31 @@ gulp.task('browserSync', function() {
 });
 
 
-gulp.task('scripts', function(){
+gulp.task('browserify', function(done) {
+  glob('_javascript/main-**.js', function(err, files) {
+    if(err) done(err);
 
-  gulp.src('_javascript/main.js')
-  .pipe(customPlumber('Error running Scripts'))
-  .pipe(p.include()).on('error', console.log)
-  .pipe(p.uglify())
-  .pipe(gulp.dest(config.AssetsPath + 'js'))
-  .pipe(p.notify({ message: 'JS Uglified!', onLast: true }))
-  .pipe(browserSync.reload(bs_reload))
+    var tasks = files.map(function(entry) {
+      return browserify({
+        entries: [entry],
+        outputStyle: 'compressed'
+      })
+      .transform("babelify", {presets: ["es2015"]})
+      .bundle()
+      .pipe(customPlumber('Error running Scripts'))
+      .pipe(source(entry))
+      .pipe(buffer())
+      .pipe(p.uglify())
+      .pipe(p.rename({
+        dirname: "js"
+      }))
+      .pipe(gulp.dest(config.AssetsPath))
+      .pipe(p.notify({ message: 'JS Browserified!', onLast: true }))
+      .pipe(browserSync.reload(bs_reload))
+    });
+    es.merge(tasks).on('end', done);
+  })
 });
-
 
 // Converts the Sass partials into a single CSS file
 gulp.task('sass', function () {
@@ -137,7 +154,7 @@ gulp.task('jekyll', () => {
 // Task to watch the things!
 gulp.task('watch', function(){
   gulp.watch('_sass/**/**/*.scss', ['sass']);
-  gulp.watch('_javascript/**/**/*.js', ['scripts']);
+  gulp.watch('_javascript/**/**/*.js', ['browserify']);
   
   // gulp.watch(['img/**/**/*',], ['imagemin']);
 });
@@ -148,6 +165,19 @@ gulp.task('watch', function(){
 /*
   Unused tasks
 */
+
+// Combining JS with include
+gulp.task('scripts', function(){
+
+  gulp.src('_javascript/main.js')
+  .pipe(customPlumber('Error running Scripts'))
+  .pipe(p.include()).on('error', console.log)
+  .pipe(p.uglify())
+  .pipe(gulp.dest(config.AssetsPath + 'js'))
+  
+  .pipe(browserSync.reload(bs_reload))
+});
+
 
 // Imagemin task for images not added into a sprite map
 gulp.task('imagemin', function() {
@@ -167,7 +197,7 @@ gulp.task('imagemin', function() {
 gulp.task('default', function(callback) {
   runSequence(
     'jekyll',
-    ['sass', 'scripts'], 
+    ['sass', 'browserify'], 
     ['browserSync', 'watch'],
     callback
   )
